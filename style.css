@@ -1,0 +1,129 @@
+body {
+    margin: 0;
+    background: #0d0614;
+    color: #fff;
+    font-family: 'Courier New', Courier, monospace;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    min-height: 100vh;
+    overflow: hidden;
+    user-select: none;
+}
+
+#game-container {
+    position: relative;
+    box-shadow: 0 0 40px rgba(0, 255, 255, 0.2), 0 20px 50px rgba(0,0,0,0.8);
+    border-radius: 12px;
+    overflow: hidden;
+    border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+canvas {
+    display: block;
+    background: linear-gradient(to bottom, #120722, #05020a);
+}
+
+/* UI Structure */
+.overlay {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 800px;
+    height: 400px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    background: rgba(8, 4, 15, 0.92);
+    transition: all 0.3s ease;
+    z-index: 10;
+}
+
+.hidden {
+    display: none !important;
+}
+
+h1 {
+    font-size: 46px;
+    margin: 0 0 10px 0;
+    text-transform: uppercase;
+    letter-spacing: 4px;
+    text-shadow: 0 0 15px #00ffff;
+    color: #ffffff;
+}
+
+p {
+    font-size: 15px;
+    color: #a59cb0;
+    margin: 0 0 35px 0;
+    letter-spacing: 1px;
+}
+
+button {
+    padding: 14px 40px;
+    font-size: 18px;
+    font-weight: bold;
+    font-family: inherit;
+    text-transform: uppercase;
+    background: #00ffff;
+    color: #05020a;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+    box-shadow: 0 0 15px rgba(0, 255, 255, 0.3);
+    transition: all 0.2s ease-in-out;
+}
+
+button:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 0 25px rgba(0, 255, 255, 0.7);
+}
+
+#level-select {
+    display: flex;
+    gap: 12px;
+    margin-bottom: 30px;
+}
+
+.lvl-btn {
+    padding: 10px 14px;
+    font-size: 13px;
+    background: #190f26;
+    color: #a59cb0;
+    border: 1px solid #3d285c;
+    border-radius: 4px;
+    cursor: pointer;
+    box-shadow: none;
+}
+
+.lvl-btn.active {
+    border-color: #00ffff;
+    color: #ffffff;
+    background: rgba(0, 255, 255, 0.1);
+    box-shadow: 0 0 10px rgba(0, 255, 255, 0.2);
+}
+
+/* Player HUD */
+#hud {
+    position: absolute;
+    top: 20px;
+    left: 20px;
+    right: 20px;
+    display: flex;
+    justify-content: space-between;
+    font-size: 16px;
+    letter-spacing: 1px;
+    pointer-events: none;
+    text-shadow: 0 2px 4px #000;
+    font-weight: bold;
+}
+
+#mode-badge {
+    padding: 3px 12px;
+    background: rgba(255, 255, 255, 0.1);
+    border: 1px solid rgba(255, 255, 255, 0.2);
+    border-radius: 3px;
+    text-transform: uppercase;
+}
