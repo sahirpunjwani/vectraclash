@@ -16,7 +16,7 @@ const levelButtons = document.querySelectorAll('.lvl-btn');
 
 // System Configurations
 let currentLevel = 1;
-let gameState = 'menu'; // menu, playing, dead, won
+let gameState = 'menu'; // menu, playing, dying, celebrating, dead, won
 let actionPressed = false;
 let animationFrameId;
 
@@ -27,10 +27,18 @@ const UFO_FLAP = -6.5;
 const FLOOR_Y = 330;
 const CEILING_Y = 60;
 
+// Game feel helper parameters
+let jumpBufferTimer = 0;   
+let coyoteTimeTimer = 0;   
+const BUFFER_WINDOW = 9;   
+const COYOTE_WINDOW = 6;   
+
 let obstacles = [];
+let particles = []; 
+let animationTimer = 0; // Dual-purpose timer for death and victory animation states
 let totalLevelWidth = 4200; 
 let cameraX = 0;
-let gameSpeed = 6;
+let gameSpeed = 5.5; 
 
 // Core Player Physics State
 let player = {
@@ -41,15 +49,16 @@ let player = {
     vy: 0,
     rotation: 0,
     mode: 'cube', 
-    ballGravityDir: 1, // 1 = normal, -1 = inverted
+    ballGravityDir: 1, 
     isGrounded: false
 };
 
+// Level design maps
 const levelData = {
-    1: { mode: 'cube', color: '#ff2a6d', map: [450, 750, 1050, 1350, 1600, 1900, 2200, 2500, 2800, 3100, 3400] },
-    2: { mode: 'ship', color: '#05d9e8', map: [500, 850, 1150, 1450, 1750, 2100, 2400, 2700, 3000, 3300] }, 
-    3: { mode: 'ball', color: '#f5a623', map: [450, 750, 1050, 1350, 1650, 1950, 2250, 2550, 2850, 3150] },
-    4: { mode: 'ufo',  color: '#b10dc9', map: [500, 800, 1100, 1400, 1700, 2000, 2300, 2600, 2900, 3300] },
+    1: { mode: 'cube', color: '#ff2a6d', map: [650, 1100, 1600, 2100, 2500, 2900, 3400] },
+    2: { mode: 'ship', color: '#05d9e8', map: [600, 950, 1300, 1650, 2000, 2400, 2800, 3200, 3500] }, 
+    3: { mode: 'ball', color: '#f5a623', map: [600, 900, 1200, 1500, 1800, 2100, 2400, 2700, 3000, 3300] },
+    4: { mode: 'ufo',  color: '#b10dc9', map: [600, 900, 1200, 1500, 1800, 2100, 2400, 2700, 3000, 3400] },
     5: { mode: 'cube', color: '#01ff70', map: [] } 
 };
 
@@ -60,11 +69,9 @@ function generateObstacles(lvl) {
     if (lvl < 5) {
         data.map.forEach(x => {
             if (data.mode === 'cube' || data.mode === 'ball') {
-                // Raised spike coordinates to avoid base layer grounding bugs
                 obstacles.push({ x: x, y: FLOOR_Y - 28, type: 'spike', w: 28, h: 28 });
-                if (x % 2 === 0 && data.mode === 'cube') {
-                    // Safe spacing for platform structures
-                    obstacles.push({ x: x - 130, y: FLOOR_Y - 50, type: 'block', w: 50, h: 20 });
+                if (x === 1100 || x === 2500) {
+                    obstacles.push({ x: x - 180, y: FLOOR_Y - 48, type: 'block', w: 65, h: 20 });
                 }
             } else if (data.mode === 'ship') {
                 if (x % 2 === 0) {
@@ -81,39 +88,29 @@ function generateObstacles(lvl) {
         });
     } else {
         // LEVEL 5: Dynamic Hybrid Sequence Matrix
-        // Stage A: Cube Start (0 -> 1000)
-        obstacles.push({ x: 450, y: FLOOR_Y - 28, type: 'spike', w: 28, h: 28 });
-        obstacles.push({ x: 700, y: FLOOR_Y - 28, type: 'spike', w: 28, h: 28 });
-        obstacles.push({ x: 850, y: FLOOR_Y - 50, type: 'block', w: 60, h: 20 });
+        obstacles.push({ x: 500, y: FLOOR_Y - 28, type: 'spike', w: 28, h: 28 });
+        obstacles.push({ x: 800, y: FLOOR_Y - 50, type: 'block', w: 60, h: 20 });
         
-        // Portal Transition to Ship Mode (Slightly raised for entry smoothness)
-        obstacles.push({ x: 1050, y: FLOOR_Y - 150, type: 'portal', targetMode: 'ship', w: 25, h: 120 });
+        obstacles.push({ x: 1100, y: FLOOR_Y - 150, type: 'portal', targetMode: 'ship', w: 25, h: 120 });
         
-        // Stage B: Spaceship Core (1050 -> 2000)
-        obstacles.push({ x: 1250, y: CEILING_Y, type: 'ceiling_spike', w: 35, h: 60 });
-        obstacles.push({ x: 1450, y: FLOOR_Y - 60, type: 'spike', w: 35, h: 60 });
-        obstacles.push({ x: 1700, y: 185, type: 'block', w: 75, h: 40 });
+        obstacles.push({ x: 1350, y: CEILING_Y, type: 'ceiling_spike', w: 35, h: 60 });
+        obstacles.push({ x: 1600, y: FLOOR_Y - 60, type: 'spike', w: 35, h: 60 });
+        obstacles.push({ x: 1850, y: 185, type: 'block', w: 75, h: 40 });
         
-        // Portal Transition to Ball Mode
-        obstacles.push({ x: 2050, y: FLOOR_Y - 150, type: 'portal', targetMode: 'ball', w: 25, h: 120 });
+        obstacles.push({ x: 2150, y: FLOOR_Y - 150, type: 'portal', targetMode: 'ball', w: 25, h: 120 });
         
-        // Stage C: Gravity Ball Flux (2050 -> 3000)
-        obstacles.push({ x: 2250, y: FLOOR_Y - 28, type: 'spike', w: 28, h: 28 });
-        obstacles.push({ x: 2450, y: CEILING_Y, type: 'ceiling_spike', w: 28, h: 28 });
-        obstacles.push({ x: 2650, y: FLOOR_Y - 28, type: 'spike', w: 28, h: 28 });
-        obstacles.push({ x: 2850, y: CEILING_Y, type: 'ceiling_spike', w: 28, h: 28 });
+        obstacles.push({ x: 2350, y: FLOOR_Y - 28, type: 'spike', w: 28, h: 28 });
+        obstacles.push({ x: 2550, y: CEILING_Y, type: 'ceiling_spike', w: 28, h: 28 });
+        obstacles.push({ x: 2750, y: FLOOR_Y - 28, type: 'spike', w: 28, h: 28 });
 
-        // Portal Transition to UFO Final Drive
         obstacles.push({ x: 3050, y: FLOOR_Y - 150, type: 'portal', targetMode: 'ufo', w: 25, h: 120 });
 
-        // Stage D: UFO Finale (3050 -> 3900)
-        obstacles.push({ x: 3250, y: 210, type: 'block', w: 50, h: 50 });
-        obstacles.push({ x: 3450, y: FLOOR_Y - 50, type: 'spike', w: 40, h: 50 });
-        obstacles.push({ x: 3700, y: CEILING_Y, type: 'ceiling_spike', w: 40, h: 50 });
+        obstacles.push({ x: 3300, y: 210, type: 'block', w: 50, h: 50 });
+        obstacles.push({ x: 3550, y: FLOOR_Y - 50, type: 'spike', w: 40, h: 50 });
     }
 }
 
-// Global Execution Hooks / Event Binding
+// Input Controllers
 window.addEventListener('keydown', (e) => {
     if (e.code === 'Space' || e.code === 'ArrowUp') handleActionStart();
 });
@@ -132,15 +129,14 @@ levelButtons.forEach(btn => {
 });
 
 playBtn.addEventListener('click', startGame);
-retryBtn.addEventListener('click', startGame);
+retryBtn.addEventListener('click', handleOverlayButtonClick);
 
 function handleActionStart() {
     if (gameState !== 'playing') return;
     actionPressed = true;
 
-    if (player.mode === 'cube' && player.isGrounded) {
-        player.vy = JUMP_FORCE;
-        player.isGrounded = false;
+    if (player.mode === 'cube') {
+        jumpBufferTimer = BUFFER_WINDOW;
     } else if (player.mode === 'ball') {
         player.ballGravityDir *= -1;
         player.isGrounded = false;
@@ -153,6 +149,21 @@ function handleActionEnd() {
     actionPressed = false;
 }
 
+function createExplosion(x, y, color, speedMultiplier = 1) {
+    particles = [];
+    for (let i = 0; i < 35; i++) {
+        particles.push({
+            x: x,
+            y: y,
+            vx: (Math.random() - 0.5) * 8 * speedMultiplier,
+            vy: (Math.random() - 0.5) * 8 * speedMultiplier,
+            size: Math.random() * 4 + 2,
+            alpha: 1,
+            color: color
+        });
+    }
+}
+
 function startGame() {
     menuOverlay.classList.add('hidden');
     endOverlay.classList.add('hidden');
@@ -160,6 +171,9 @@ function startGame() {
     
     gameState = 'playing';
     cameraX = 0;
+    particles = [];
+    jumpBufferTimer = 0;
+    coyoteTimeTimer = 0;
     
     player.x = 100;
     player.vy = 0;
@@ -176,6 +190,36 @@ function startGame() {
     loop();
 }
 
+function triggerDeath() {
+    gameState = 'dying';
+    animationTimer = 45; 
+    createExplosion(player.x + player.width / 2, player.y + player.height / 2, levelData[currentLevel].color, 1);
+}
+
+function triggerVictory() {
+    gameState = 'celebrating';
+    animationTimer = 60; // Long elegant window to enjoy the level fireworks
+    createExplosion(totalLevelWidth - 195, (FLOOR_Y + CEILING_Y) / 2, '#01ff70', 1.5);
+}
+
+function handleOverlayButtonClick() {
+    if (retryBtn.getAttribute('data-action') === 'next') {
+        currentLevel++;
+        // Update level choice indicators on menu screen automatically
+        levelButtons.forEach(b => {
+            b.classList.toggle('active', parseInt(b.getAttribute('data-lvl')) === currentLevel);
+        });
+        startGame();
+    } else if (retryBtn.getAttribute('data-action') === 'menu') {
+        endOverlay.classList.add('hidden');
+        menuOverlay.classList.remove('hidden');
+        gameState = 'menu';
+        draw();
+    } else {
+        startGame(); // Default restart operation
+    }
+}
+
 function endGame(win) {
     gameState = win ? 'won' : 'dead';
     cancelAnimationFrame(animationFrameId);
@@ -187,16 +231,25 @@ function endGame(win) {
         endTitle.innerText = "Grid Cleared";
         endTitle.style.textShadow = "0 0 15px #01ff70";
         endSub.innerText = `Matrix ${currentLevel} successfully calibrated.`;
-        retryBtn.innerText = "Rerun Simulation";
+        
+        if (currentLevel < 5) {
+            retryBtn.innerText = "Advance Sequence";
+            retryBtn.setAttribute('data-action', 'next');
+        } else {
+            endTitle.innerText = "System Mastered";
+            endSub.innerText = "All architectural frameworks completely synchronized!";
+            retryBtn.innerText = "Return to Main Grid";
+            retryBtn.setAttribute('data-action', 'menu');
+        }
     } else {
         endTitle.innerText = "System Crash";
         endTitle.style.textShadow = "0 0 15px #ff2a6d";
         endSub.innerText = `Sync breakdown at: ${Math.min(100, Math.floor((cameraX / (totalLevelWidth - 800)) * 100))}%`;
         retryBtn.innerText = "Reboot System";
+        retryBtn.setAttribute('data-action', 'retry');
     }
 }
 
-// Check if two rectangles intersect (AABB)
 function checkCollision(r1, r2) {
     return r1.x < r2.x + r2.w &&
            r1.x + r1.w > r2.x &&
@@ -204,23 +257,51 @@ function checkCollision(r1, r2) {
            r1.y + r1.h > r2.y;
 }
 
-// Fixed-Step Two-Axis Decoupled Movement Update Loop
 function update() {
+    // Handling Death Particles Simulation Look
+    if (gameState === 'dying') {
+        particles.forEach(p => {
+            p.x += p.vx;
+            p.y += p.vy;
+            p.alpha -= 0.02;
+        });
+        animationTimer--;
+        if (animationTimer <= 0) endGame(false);
+        return;
+    }
+
+    // Handling Celebration Animation Sequence Look
+    if (gameState === 'celebrating') {
+        cameraX += gameSpeed * 0.3; // camera smoothly pans slightly forward
+        player.x += gameSpeed * 0.3;
+        player.rotation += 0.15;   // rapid victory rotation spins
+        
+        particles.forEach(p => {
+            p.x += p.vx;
+            p.y += p.vy;
+            p.alpha -= 0.015;
+        });
+        
+        animationTimer--;
+        if (animationTimer <= 0) endGame(true);
+        return;
+    }
+
     if (gameState !== 'playing') return;
 
-    // --- 1. AXIS SEPARATED HORIZONTAL MOVEMENT ---
-    cameraX += gameSpeed;
-    let oldPlayerX = player.x;
-    player.x = cameraX + 100;
-    let actualMoveX = player.x - oldPlayerX;
+    if (jumpBufferTimer > 0) jumpBufferTimer--;
+    if (coyoteTimeTimer > 0) coyoteTimeTimer--;
 
-    // Build player's prospective horizontal collision zone
+    // --- HORIZONTAL MOVEMENT ---
+    cameraX += gameSpeed;
+    player.x = cameraX + 100;
+
     let playerRectX = { x: player.x, y: player.y, w: player.width, h: player.height };
 
     for (let i = 0; i < obstacles.length; i++) {
         let obs = obstacles[i];
         let obsBox = { x: obs.x, y: obs.y, w: obs.w, h: obs.h };
-        if (obs.type === 'spike' || obs.type === 'ceiling_spike') obsBox.h = obs.h - 4; // Slight grace padding
+        if (obs.type === 'spike' || obs.type === 'ceiling_spike') obsBox.h = obs.h - 4;
 
         if (checkCollision(playerRectX, obsBox)) {
             if (obs.type === 'portal') {
@@ -228,18 +309,14 @@ function update() {
                     player.mode = obs.targetMode;
                     player.vy = 0;
                 }
-            } else if (obs.type === 'block') {
-                // If moving into a wall side before vertical update, it's a fatal crash!
-                endGame(false);
-                return;
             } else {
-                endGame(false); // Hazard hit
+                triggerDeath();
                 return;
             }
         }
     }
 
-    // --- 2. AXIS SEPARATED VERTICAL MOVEMENT & GRAVITY ---
+    // --- VERTICAL MOVEMENT & GRAVITY ---
     if (player.mode === 'cube') {
         player.vy += GRAVITY;
     } else if (player.mode === 'ship') {
@@ -253,29 +330,25 @@ function update() {
         player.vy = Math.min(7.5, player.vy); 
     }
 
+    let dynamicGrounded = false;
     player.y += player.vy;
-    player.isGrounded = false;
 
-    // Hard Environment Boundaries Constraints
+    // Boundaries
     if (player.y >= FLOOR_Y - player.height) {
-        if (player.mode === 'ball' && player.ballGravityDir === -1) {
-            // Intentionally letting it float past if gravity is inverted
-        } else {
+        if (!(player.mode === 'ball' && player.ballGravityDir === -1)) {
             player.y = FLOOR_Y - player.height;
             player.vy = 0;
-            player.isGrounded = true;
+            dynamicGrounded = true;
         }
     } else if (player.y <= CEILING_Y) {
-        if (player.mode === 'ball' && player.ballGravityDir === 1) {
-            // Safe
-        } else {
+        if (!(player.mode === 'ball' && player.ballGravityDir === 1)) {
             player.y = CEILING_Y;
             player.vy = 0;
-            player.isGrounded = true;
+            dynamicGrounded = true;
         }
     }
 
-    // Solve solid vertical object interactions (Platforms)
+    // Platforms
     let playerRectY = { x: player.x, y: player.y, w: player.width, h: player.height };
     
     for (let i = 0; i < obstacles.length; i++) {
@@ -284,33 +357,46 @@ function update() {
 
         if (checkCollision(playerRectY, obsBox)) {
             if (obs.type === 'block') {
-                // Land safely on top of blocks while moving down
-                if (player.vy >= 0 && (player.y + player.height - player.vy) <= obs.y + 4 && player.ballGravityDir === 1) {
+                if (player.vy >= 0 && (player.y + player.height - player.vy) <= obs.y + 6 && player.ballGravityDir === 1) {
                     player.y = obs.y - player.height;
                     player.vy = 0;
-                    player.isGrounded = true;
+                    dynamicGrounded = true;
                 } 
-                // Snap cleanly into ceiling platform nodes under inverted tracking
-                else if (player.vy <= 0 && (player.y - player.vy) >= (obs.y + obs.h - 4) && player.ballGravityDir === -1) {
+                else if (player.vy <= 0 && (player.y - player.vy) >= (obs.y + obs.h - 6) && player.ballGravityDir === -1) {
                     player.y = obs.y + obs.h;
                     player.vy = 0;
-                    player.isGrounded = true;
+                    dynamicGrounded = true;
                 } else {
-                    // Striking under-hanging geometry from below or side
-                    endGame(false);
+                    triggerDeath();
                     return;
                 }
             } else if (obs.type === 'spike' || obs.type === 'ceiling_spike') {
-                endGame(false);
+                triggerDeath();
                 return;
             }
         }
     }
 
-    // --- 3. ROTATION TRACKING HANDLERS ---
+    if (dynamicGrounded) {
+        player.isGrounded = true;
+        coyoteTimeTimer = COYOTE_WINDOW; 
+    } else if (coyoteTimeTimer <= 0) {
+        player.isGrounded = false;
+    }
+
+    // Controls Engine Logic Resolved
+    if (player.mode === 'cube') {
+        if (jumpBufferTimer > 0 && (player.isGrounded || coyoteTimeTimer > 0)) {
+            player.vy = JUMP_FORCE;
+            player.isGrounded = false;
+            coyoteTimeTimer = 0;
+            jumpBufferTimer = 0; 
+        }
+    }
+
+    // --- ROTATION TRACKING ---
     if (player.mode === 'cube') {
         if (player.isGrounded) {
-            // Smoothly snap rotation back down flush to base plane angles when grounded
             player.rotation = Math.round(player.rotation / (Math.PI / 2)) * (Math.PI / 2);
         } else {
             player.rotation += 0.09; 
@@ -321,25 +407,24 @@ function update() {
         player.rotation += 0.08 * player.ballGravityDir;
     }
 
-    // Engine UI Sync Update
     let progress = Math.min(100, Math.floor((cameraX / (totalLevelWidth - 800)) * 100));
     progressDisplay.innerText = `Progress: ${progress}%`;
     modeBadge.innerText = player.mode;
 
+    // Check level completion crossing point
     if (cameraX >= totalLevelWidth - 800) {
-        endGame(true);
+        triggerVictory();
         return;
     }
 }
 
-// Specialized Canvas Rendering Routine
 function draw() {
     ctx.clearRect(0, 0, canvas.width, canvas.height);
     
     ctx.save();
     ctx.translate(-cameraX, 0); 
 
-    // Render Matrix Grid Arrays (Parallax Illusion Effect)
+    // Grid Array Render
     ctx.strokeStyle = 'rgba(255, 255, 255, 0.03)';
     ctx.lineWidth = 1;
     let gridSize = 50;
@@ -348,7 +433,7 @@ function draw() {
         ctx.beginPath(); ctx.moveTo(x, CEILING_Y); ctx.lineTo(x, FLOOR_Y); ctx.stroke();
     }
 
-    // Static Border Layouts
+    // Map Boundaries
     ctx.fillStyle = '#06030b';
     ctx.fillRect(cameraX, FLOOR_Y, canvas.width, canvas.height - FLOOR_Y);
     ctx.fillRect(cameraX, 0, canvas.width, CEILING_Y);
@@ -358,11 +443,11 @@ function draw() {
     ctx.beginPath(); ctx.moveTo(cameraX, FLOOR_Y); ctx.lineTo(cameraX + canvas.width, FLOOR_Y); ctx.stroke();
     ctx.beginPath(); ctx.moveTo(cameraX, CEILING_Y); ctx.lineTo(cameraX + canvas.width, CEILING_Y); ctx.stroke();
 
-    // Terminating Level Node Gate
+    // Goal Gate Layout
     ctx.fillStyle = '#01ff70';
     ctx.fillRect(totalLevelWidth - 200, CEILING_Y, 10, FLOOR_Y - CEILING_Y);
 
-    // Hazard and Structure Layer Rendering Loop
+    // Obstacles Layer
     obstacles.forEach(obs => {
         ctx.fillStyle = levelData[currentLevel].color;
         
@@ -409,69 +494,82 @@ function draw() {
         }
     });
 
-    // Translate canvas focal point to player spatial matrix center
-    ctx.save();
-    ctx.translate(player.x + player.width / 2, player.y + player.height / 2);
-    ctx.rotate(player.rotation);
-
-    ctx.fillStyle = '#fff'; 
-    ctx.strokeStyle = '#000';
-    ctx.lineWidth = 2.5;
-
-    // Vector Graphics Node Configurations for Player Avatars
-    if (player.mode === 'cube') {
-        ctx.fillRect(-player.width / 2, -player.height / 2, player.width, player.height);
-        ctx.strokeRect(-player.width / 2, -player.height / 2, player.width, player.height);
-        ctx.fillStyle = levelData[currentLevel].color;
-        ctx.fillRect(-player.width / 4, -player.height / 4, player.width / 2, player.height / 2);
-    } 
-    else if (player.mode === 'ship') {
-        ctx.beginPath();
-        ctx.moveTo(-player.width/2, player.height/4);
-        ctx.lineTo(player.width/2, 0);
-        ctx.lineTo(-player.width/2, -player.height/2);
-        ctx.lineTo(-player.width/4, 0);
-        ctx.closePath();
-        ctx.fillStyle = levelData[currentLevel].color;
-        ctx.fill();
-        ctx.stroke();
-    } 
-    else if (player.mode === 'ball') {
-        ctx.beginPath();
-        ctx.arc(0, 0, player.width / 2, 0, Math.PI * 2);
-        ctx.fillStyle = levelData[currentLevel].color;
-        ctx.fill();
-        ctx.stroke();
-        ctx.beginPath();
-        ctx.moveTo(-player.width/2, 0); ctx.lineTo(player.width/2, 0);
-        ctx.moveTo(0, -player.height/2); ctx.lineTo(0, player.height/2);
-        ctx.strokeStyle = '#fff';
-        ctx.stroke();
-    } 
-    else if (player.mode === 'ufo') {
-        ctx.beginPath();
-        ctx.ellipse(0, 0, player.width/1.1, player.height/2.4, 0, 0, Math.PI*2);
-        ctx.fillStyle = levelData[currentLevel].color;
-        ctx.fill();
-        ctx.stroke();
-        ctx.beginPath();
-        ctx.arc(0, -3, player.width/3, Math.PI, 0);
-        ctx.fillStyle = '#fff';
-        ctx.fill();
-        ctx.stroke();
+    // Render death or victory fireworks particles
+    if (gameState === 'dying' || gameState === 'celebrating') {
+        particles.forEach(p => {
+            ctx.save();
+            ctx.globalAlpha = Math.max(0, p.alpha);
+            ctx.fillStyle = p.color;
+            ctx.shadowBlur = 10;
+            ctx.shadowColor = p.color;
+            ctx.fillRect(p.x, p.y, p.size, p.size);
+            ctx.restore();
+        });
     }
 
-    ctx.restore();
+    // Render active player avatar
+    if (gameState === 'playing' || gameState === 'celebrating') {
+        ctx.save();
+        ctx.translate(player.x + player.width / 2, player.y + player.height / 2);
+        ctx.rotate(player.rotation);
+
+        ctx.fillStyle = '#fff'; 
+        ctx.strokeStyle = '#000';
+        ctx.lineWidth = 2.5;
+
+        if (player.mode === 'cube') {
+            ctx.fillRect(-player.width / 2, -player.height / 2, player.width, player.height);
+            ctx.strokeRect(-player.width / 2, -player.height / 2, player.width, player.height);
+            ctx.fillStyle = levelData[currentLevel].color;
+            ctx.fillRect(-player.width / 4, -player.height / 4, player.width / 2, player.height / 2);
+        } 
+        else if (player.mode === 'ship') {
+            ctx.beginPath();
+            ctx.moveTo(-player.width/2, player.height/4);
+            ctx.lineTo(player.width/2, 0);
+            ctx.lineTo(-player.width/2, -player.height/2);
+            ctx.lineTo(-player.width/4, 0);
+            ctx.closePath();
+            ctx.fillStyle = levelData[currentLevel].color;
+            ctx.fill();
+            ctx.stroke();
+        } 
+        else if (player.mode === 'ball') {
+            ctx.beginPath();
+            ctx.arc(0, 0, player.width / 2, 0, Math.PI * 2);
+            ctx.fillStyle = levelData[currentLevel].color;
+            ctx.fill();
+            ctx.stroke();
+            ctx.beginPath();
+            ctx.moveTo(-player.width/2, 0); ctx.lineTo(player.width/2, 0);
+            ctx.moveTo(0, -player.height/2); ctx.lineTo(0, player.height/2);
+            ctx.strokeStyle = '#fff';
+            ctx.stroke();
+        } 
+        else if (player.mode === 'ufo') {
+            ctx.beginPath();
+            ctx.ellipse(0, 0, player.width/1.1, player.height/2.4, 0, 0, Math.PI*2);
+            ctx.fillStyle = levelData[currentLevel].color;
+            ctx.fill();
+            ctx.stroke();
+            ctx.beginPath();
+            ctx.arc(0, -3, player.width/3, Math.PI, 0);
+            ctx.fillStyle = '#fff';
+            ctx.fill();
+            ctx.stroke();
+        }
+        ctx.restore();
+    }
+
     ctx.restore();
 }
 
 function loop() {
     update();
     draw();
-    if (gameState === 'playing') {
+    if (gameState === 'playing' || gameState === 'dying' || gameState === 'celebrating') {
         animationFrameId = requestAnimationFrame(loop);
     }
 }
 
-// Force frame zero initialization layout paint
 draw();
