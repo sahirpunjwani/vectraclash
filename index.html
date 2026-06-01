@@ -1,0 +1,42 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>VectraClash</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+    <div id="game-container">
+        <canvas id="gameCanvas" width="800" height="400"></canvas>
+        
+        <div id="hud" class="hidden">
+            <div id="level-display">Level 1</div>
+            <div id="progress-display">Progress: 0%</div>
+            <div id="mode-badge">Cube</div>
+        </div>
+
+        <div id="menu-overlay" class="overlay">
+            <h1>VectraClash</h1>
+            <p>Select a matrix grid and initiate calibration sequence</p>
+            <div id="level-select">
+                <button class="lvl-btn active" data-lvl="1">Grid 1 (Cube)</button>
+                <button class="lvl-btn" data-lvl="2">Grid 2 (Ship)</button>
+                <button class="lvl-btn" data-lvl="3">Grid 3 (Ball)</button>
+                <button class="lvl-btn" data-lvl="4">Grid 4 (UFO)</button>
+                <button class="lvl-btn" data-lvl="5">Grid 5 (Hybrid)</button>
+            </div>
+            <button id="play-btn">Initialize Play</button>
+        </div>
+
+        <div id="end-overlay" class="overlay hidden">
+            <h1 id="end-title">System Crash</h1>
+            <p id="end-sub">Core structural integrity compromised!</p>
+            <button id="retry-btn">Reboot System</button>
+        </div>
+    </div>
+
+    <script src="game.js"></script>
+</body>
+</html>
